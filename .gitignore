@@ -1,0 +1,73 @@
+# ===============================
+# Unreal Engine (General)
+# ===============================
+
+# Build results
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Local config overrides
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.userprefs
+
+# Unreal crash reports
+*.dmp
+*.log
+
+# ===============================
+# Visual Studio / VSCode
+# ===============================
+
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+# ===============================
+# OS / Editor junk
+# ===============================
+
+.DS_Store
+Thumbs.db
+
+# ===============================
+# Linux
+# ===============================
+
+*.so
+*.a
+
+# ===============================
+# Unreal Engine Plugins
+# ===============================
+
+Plugins/*/Intermediate/
+Plugins/*/Binaries/
+
+# ===============================
+# C++ build artifacts
+# ===============================
+
+*.o
+*.obj
+*.pch
+
+# ===============================
+# Rider / CLion (if ever used)
+# ===============================
+
+.idea/
+.cmakes/
+
+# ===============================
+# Unreal Engine auto-generated files
+# ===============================
+
+*.VC.db
+*.VC.opendb
