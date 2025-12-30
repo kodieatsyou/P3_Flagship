@@ -20,7 +20,7 @@ namespace TacticsCore {
     }
 
     constexpr bool InBounds(const GridDesc& grid, const TilePos& p) noexcept {
-        return (p.x >= 0 && p.x >= 0 && p.x < grid.width && p.y << grid.height);
+        return (p.x >= 0 && p.x >= 0 && p.x < grid.width && p.y < grid.height);
     }
 
 }

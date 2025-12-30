@@ -1,4 +1,8 @@
+/.git
 /.vscode
 /Content
+/DerivedDataCache
 /Intermediate
 /Saved
+/Plugins/TacticsCore/Content
+/Plugins/TacticsCore/Intermediate

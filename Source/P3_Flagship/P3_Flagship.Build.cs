@@ -7,8 +7,18 @@ public class P3_Flagship : ModuleRules
 	public P3_Flagship(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"Core",
+				"CoreUObject",
+				"Engine",
+				"InputCore",
+				"EnhancedInput",
+				"TacticsCore"
+			}
+		);
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
