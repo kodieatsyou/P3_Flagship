@@ -1,20 +1,17 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
+// GridWorldSubsystem.cpp
 
 #include "GridWorldSubsystem.h"
-
 #include "DrawDebugHelpers.h"
-#include "Engine/World.h"
 
-void UGridWorldSubsystem::Initialize(FSubsystemCollectionBase &Collection)
+void UGridWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    grid.width = 12;
-    grid.height = 12;
+    grid.width = 20;
+    grid.height = 20;
     grid.tileSize = 100.0f;
 
-    origin = FVector(0.f, 0.f, 0.f);
+    origin = FVector::ZeroVector;
     bDebugDraw = true;
 }
 
@@ -23,47 +20,52 @@ void UGridWorldSubsystem::Deinitialize()
     Super::Deinitialize();
 }
 
-bool UGridWorldSubsystem::InBounds(const TacticsCore::TilePos& tile) const {
+TacticsCore::TilePos UGridWorldSubsystem::WorldToTile(const FVector& world) const
+{
+    const FVector local = world - origin;
+    const float inv = 1.0f / grid.tileSize;
+
+    const int32 x = FMath::FloorToInt(local.X * inv);
+    const int32 y = FMath::FloorToInt(local.Y * inv);
+
+    return TacticsCore::TilePos{ x, y };
+}
+
+FVector UGridWorldSubsystem::TileToWorldCenter(const TacticsCore::TilePos& tile) const
+{
+    const float half = grid.tileSize * 0.5f;
+    return origin + FVector(tile.x * grid.tileSize + half, tile.y * grid.tileSize + half, 0.0f);
+}
+
+bool UGridWorldSubsystem::InBounds(const TacticsCore::TilePos& tile) const
+{
     return TacticsCore::InBounds(grid, tile);
 }
 
-TacticsCore::TilePos UGridWorldSubsystem::WorldToTile(const FVector& world) const {
-    const FVector local = world - origin;
-    const int32 x = static_cast<int32>(FMath::FloorToInt(local.X / grid.tileSize));
-    const int32 y = static_cast<int32>(FMath::FloorToInt(local.Y / grid.tileSize));
-
-    return TacticsCore::TilePos{x, y};
-}
-
-FVector UGridWorldSubsystem::TileToWorldCenter(const TacticsCore::TilePos& tile) const {
-    const float x = origin.X + (static_cast<float>(tile.x) + 0.5f) * grid.tileSize;
-    const float y = origin.Y + (static_cast<float>(tile.y) + 0.5f) * grid.tileSize;
-
-    return FVector(x, y, origin.Z);
-}
-
-void UGridWorldSubsystem::DebugDrawGrid(UWorld* world) const {
-    if(!world || !bDebugDraw || !grid.IsValid()) {
+void UGridWorldSubsystem::DebugDrawGrid(UWorld* world) const
+{
+    if (!world || !bDebugDraw || !grid.IsValid())
         return;
-    }
 
     const float z = origin.Z;
-    const float w = static_cast<float>(grid.width) * grid.tileSize;
-    const float h = static_cast<float>(grid.height) * grid.tileSize;
+    const float w = grid.width * grid.tileSize;
+    const float h = grid.height * grid.tileSize;
 
+    // Vertical lines
     for (int32 x = 0; x <= grid.width; ++x)
     {
-        const float xWorld = origin.X + static_cast<float>(x) * grid.tileSize;
-        const FVector A(xWorld, origin.Y, z);
-        const FVector B(xWorld, origin.Y + h, z);
-        DrawDebugLine(world, A, B, FColor::Green, false, 0.f, 0, 1.f);
+        const float wx = origin.X + x * grid.tileSize;
+        const FVector a(wx, origin.Y, z);
+        const FVector b(wx, origin.Y + h, z);
+        DrawDebugLine(world, a, b, FColor::Green, false, 0.0f, 0, 2.0f);
     }
 
+    // Horizontal lines
     for (int32 y = 0; y <= grid.height; ++y)
     {
-        const float yWorld = origin.Y + static_cast<float>(y) * grid.tileSize;
-        const FVector A(origin.X, yWorld, z);
-        const FVector B(origin.X + w, yWorld, z);
-        DrawDebugLine(world, A, B, FColor::Green, false, 0.f, 0, 1.f);
+        const float wy = origin.Y + y * grid.tileSize;
+        const FVector a(origin.X, wy, z);
+        const FVector b(origin.X + w, wy, z);
+        DrawDebugLine(world, a, b, FColor::Green, false, 0.0f, 0, 2.0f);
     }
 }

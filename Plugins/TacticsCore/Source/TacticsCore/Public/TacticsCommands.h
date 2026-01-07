@@ -14,7 +14,7 @@ namespace TacticsCore {
     };
 
     struct MoveCommand {
-        EntityId eneity = 0;
+        EntityId entity = 0;
         TilePos dest{};
     };
 

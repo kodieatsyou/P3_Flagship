@@ -20,7 +20,7 @@ public:
 	const TacticsCore::TilePos& GetTile() const { return tile; }
 
 protected:
-	// Called when the game starts or when spawned
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 
 public:	
@@ -29,5 +29,12 @@ public:
 
 private:
 	void SnapToTile();
+
+	UPROPERTY(EditAnywhere, Category = "Tactics|Grid", meta = (ClampMin = "0"))
+	int32 InitialTileX = 0;
+
+	UPROPERTY(EditAnywhere, Category = "Tactics|Grid", meta = (ClampMin = "0"))
+	int32 InitialTileY = 0;
+
 	TacticsCore::TilePos tile { 0, 0 };
 };

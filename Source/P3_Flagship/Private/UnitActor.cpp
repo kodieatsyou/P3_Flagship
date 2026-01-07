@@ -9,15 +9,22 @@
 // Sets default values
 AUnitActor::AUnitActor()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 }
 
-// Called when the game starts or when spawned
+void AUnitActor::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	tile = TacticsCore::TilePos{ InitialTileX, InitialTileY };
+	SnapToTile();
+}
+
 void AUnitActor::BeginPlay()
 {
 	Super::BeginPlay();
+	tile = TacticsCore::TilePos{ InitialTileX, InitialTileY };
 	SnapToTile();
 }
 
@@ -34,17 +41,10 @@ void AUnitActor::SetTile(const TacticsCore::TilePos& newTile) {
 }
 
 void AUnitActor::SnapToTile() {
-	UWorld* world = GetWorld();
-	if(!world) {
-		return;
+	if (UWorld* W = GetWorld()) {
+		if (UGridWorldSubsystem* Grid = W->GetSubsystem<UGridWorldSubsystem>()) {
+			SetActorLocation(Grid->TileToWorldCenter(tile));
+		}
 	}
-
-	UGridWorldSubsystem* grid = world->GetSubsystem<UGridWorldSubsystem>();
-	if(!grid) {
-		return;
-	}
-
-	const FVector worldPos = grid->TileToWorldCenter(tile);
-	SetActorLocation(worldPos);
 }
 

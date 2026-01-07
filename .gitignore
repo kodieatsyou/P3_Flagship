@@ -24,10 +24,11 @@ Saved/
 # Visual Studio / VSCode
 # ===============================
 
-.vscode/*
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/settings.json
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+*.code-workspace
 
 # ===============================
 # OS / Editor junk
