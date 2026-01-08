@@ -1,104 +1,60 @@
-// GridWorldSubsystem.cpp
-
 #include "GridWorldSubsystem.h"
 #include "DrawDebugHelpers.h"
 
-
-void UGridWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+TacticsCore::GridDesc UGridWorldSubsystem::GetGridDesc() const
 {
-    Super::Initialize(Collection);
-
-    grid.width = 20;
-    grid.height = 20;
-    grid.tileSize = 100.0f;
-
-    origin = FVector::ZeroVector;
-    bDebugDraw = true;
+	return TacticsCore::GridDesc(GridWidth, GridHeight);
 }
 
-void UGridWorldSubsystem::Deinitialize()
+bool UGridWorldSubsystem::IsInBounds(const TacticsCore::TilePos& Tile) const
 {
-    Super::Deinitialize();
+	return GetGridDesc().InBounds(Tile);
 }
 
-TacticsCore::TilePos UGridWorldSubsystem::WorldToTile(const FVector& world) const
+bool UGridWorldSubsystem::IsBlockedTile(const TacticsCore::TilePos& Tile) const
 {
-    const FVector local = world - origin;
-    const float inv = 1.0f / grid.tileSize;
+	if (!IsInBounds(Tile)) {
+		return true;
+	}
 
-    const int32 x = FMath::FloorToInt(local.X * inv);
-    const int32 y = FMath::FloorToInt(local.Y * inv);
-
-    return TacticsCore::TilePos{ x, y };
+	const int32 Idx = GetGridDesc().ToIndex(Tile);
+	return BlockedIndices.Contains(Idx);
 }
 
-FVector UGridWorldSubsystem::TileToWorldCenter(const TacticsCore::TilePos& tile) const
+void UGridWorldSubsystem::SetBlockedTile(const TacticsCore::TilePos& Tile, bool bBlocked)
 {
-    const float half = grid.tileSize * 0.5f;
-    return origin + FVector(tile.x * grid.tileSize + half, tile.y * grid.tileSize + half, 0.0f);
+	if (!IsInBounds(Tile)) {
+		return;
+	}
+
+	const int32 Idx = GetGridDesc().ToIndex(Tile);
+	if (bBlocked) {
+		BlockedIndices.Add(Idx);
+	}
+	else {
+		BlockedIndices.Remove(Idx);
+	}
 }
 
-bool UGridWorldSubsystem::InBounds(const TacticsCore::TilePos& tile) const
+FVector UGridWorldSubsystem::TileToWorldCenter(const TacticsCore::TilePos& Tile) const
 {
-    return TacticsCore::InBounds(grid, tile);
+	// X -> world X, Y -> world Y
+	return GridOrigin + FVector((Tile.X + 0.5f) * TileSize, (Tile.Y + 0.5f) * TileSize, 0.0f);
 }
 
-void UGridWorldSubsystem::DebugDrawGrid(UWorld* world) const
+bool UGridWorldSubsystem::WorldToTile(const FVector& World, TacticsCore::TilePos& OutTile) const
 {
-    if (!world || !bDebugDraw || !grid.IsValid())
-        return;
+	const FVector Local = World - GridOrigin;
 
-    const float z = origin.Z;
-    const float w = grid.width * grid.tileSize;
-    const float h = grid.height * grid.tileSize;
+	const int32 X = FMath::FloorToInt(Local.X / TileSize);
+	const int32 Y = FMath::FloorToInt(Local.Y / TileSize);
 
-    // Vertical lines
-    for (int32 x = 0; x <= grid.width; ++x)
-    {
-        const float wx = origin.X + x * grid.tileSize;
-        const FVector a(wx, origin.Y, z);
-        const FVector b(wx, origin.Y + h, z);
-        DrawDebugLine(world, a, b, FColor::Green, false, 0.0f, 0, 2.0f);
-    }
-
-    // Horizontal lines
-    for (int32 y = 0; y <= grid.height; ++y)
-    {
-        const float wy = origin.Y + y * grid.tileSize;
-        const FVector a(origin.X, wy, z);
-        const FVector b(origin.X + w, wy, z);
-        DrawDebugLine(world, a, b, FColor::Green, false, 0.0f, 0, 2.0f);
-    }
+	OutTile = TacticsCore::TilePos(X, Y);
+	return IsInBounds(OutTile);
 }
 
-
-void UGridWorldSubsystem::DebugFillTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset) const
+bool UGridWorldSubsystem::IsBlockedFn(const TacticsCore::TilePos& Tile, void* UserData)
 {
-    if (!World || !grid.IsValid())
-        return;
-
-    const FVector Center = TileToWorldCenter(Tile) + FVector(0, 0, ZOffset);
-    const FVector Extent(grid.tileSize * 0.5f, grid.tileSize * 0.5f, 1.0f);
-
-    DrawDebugBox(World, Center, Extent, Color, false, 0.0f, 0, 0.0f);
-}
-
-void UGridWorldSubsystem::DebugMarkTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset) const
-{
-    if (!World || !grid.IsValid())
-        return;
-
-    const FVector Center = TileToWorldCenter(Tile) + FVector(0, 0, ZOffset);
-
-    const float Half = grid.tileSize * 0.25f;
-
-    const FVector A = Center + FVector(-Half, 0, 0);
-    const FVector B = Center + FVector(Half, 0, 0);
-    const FVector C = Center + FVector(0, -Half, 0);
-    const FVector D = Center + FVector(0, Half, 0);
-
-    DrawDebugLine(World, A, B, Color, false, 0.0f, 0, 6.0f);
-    DrawDebugLine(World, C, D, Color, false, 0.0f, 0, 6.0f);
-
-    DrawDebugBox(World, Center + FVector(0, 0, 10.0f), FVector(6, 6, 10), Color, false, 0.0f, 0, 2.0f);
+	const UGridWorldSubsystem* Grid = static_cast<const UGridWorldSubsystem*>(UserData);
+	return Grid ? Grid->IsBlockedTile(Tile) : true;
 }

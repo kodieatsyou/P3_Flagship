@@ -1,136 +1,136 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "UnitActor.h"
-
 #include "GridWorldSubsystem.h"
 #include "Engine/World.h"
+#include "Components/StaticMeshComponent.h"
+#include "DrawDebugHelpers.h"
 
-// Sets default values
 AUnitActor::AUnitActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-}
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
 
-void AUnitActor::OnConstruction(const FTransform& Transform)
-{
-	Super::OnConstruction(Transform);
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(Root);
 
-	tile = TacticsCore::TilePos{ InitialTileX, InitialTileY };
-	SnapToTile();
+	// Make sure clicks can hit the unit even if you didn't set collision in the mesh asset.
+	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Mesh->SetCollisionResponseToAllChannels(ECR_Block);
+	Mesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	Mesh->SetCollisionObjectType(ECC_WorldDynamic);
 }
 
 void AUnitActor::BeginPlay()
 {
 	Super::BeginPlay();
-	tile = TacticsCore::TilePos{ InitialTileX, InitialTileY };
-	SnapToTile();
+
+	Tile = TacticsCore::TilePos(InitialTileX, InitialTileY);
+	MovePointsRemaining = MovePointsMax;
+
+	RefreshWorldLocationFromTile();
+	ApplySelectionVisuals();
 }
 
-void AUnitActor::Tick(float DeltaTime)
+void AUnitActor::Tick(float DeltaSeconds)
 {
-	Super::Tick(DeltaTime);
+	Super::Tick(DeltaSeconds);
 
-	if (!bMoving)
-		return;
-
-	if (Path.Num() < 2 || !Path.IsValidIndex(PathIndex) || !Path.IsValidIndex(PathIndex + 1))
+	if (bIsSelected)
 	{
-		bMoving = false;
-		Path.Reset();
+		DrawDebugSphere(GetWorld(), GetActorLocation() + FVector(0, 0, 60), 30.0f, 12, FColor::Yellow, false, 0.0f, 0, 2.0f);
+	}
+
+	if (!bMoving || Waypoints.Num() == 0) {
 		return;
 	}
 
-	const float Denom = FMath::Max(0.01f, SecondsPerTile);
-	SegmentT += DeltaTime / Denom;
+	const FVector Cur = GetActorLocation();
+	const FVector Target = Waypoints[WaypointIndex];
 
-	const float T = FMath::Clamp(SegmentT, 0.0f, 1.0f);
-	SetActorLocation(FMath::Lerp(SegmentFrom, SegmentTo, T));
+	const FVector ToTarget = Target - Cur;
+	const float Dist = ToTarget.Size();
 
-	if (SegmentT >= 1.0f)
+	const float Step = MoveSpeed * DeltaSeconds;
+
+	if (Dist <= Step || Dist < 1.0f)
 	{
-		tile = Path[PathIndex + 1];
-		SetActorLocation(SegmentTo);
+		SetActorLocation(Target);
+		WaypointIndex++;
 
-		OnStepped.Broadcast(this, Path[PathIndex + 1]);
-
-		PathIndex++;
-
-		if (!Path.IsValidIndex(PathIndex + 1))
+		if (WaypointIndex >= Waypoints.Num())
 		{
-			// Done
 			bMoving = false;
-			Path.Reset();
-			SegmentT = 0.0f;
-			OnMoveFinished.Broadcast(this);
-			return;
+			Waypoints.Reset();
+			WaypointIndex = 0;
 		}
-
-		StartNextSegment();
+		return;
 	}
+
+	SetActorLocation(Cur + (ToTarget / Dist) * Step);
 }
 
-void AUnitActor::SetTile(const TacticsCore::TilePos& newTile)
+void AUnitActor::RefreshForNewTurn() {
+	MovePointsRemaining = MovePointsMax;
+}
+
+void AUnitActor::SetTileImmediate(const TacticsCore::TilePos& NewTile)
 {
+	Tile = NewTile;
 	bMoving = false;
-	Path.Reset();
-	PathIndex = 0;
-	SegmentT = 0.0f;
-
-	tile = newTile;
-	SnapToTile();
+	Waypoints.Reset();
+	WaypointIndex = 0;
+	RefreshWorldLocationFromTile();
 }
 
-void AUnitActor::SnapToTile() {
-	if (UWorld* W = GetWorld()) {
-		if (UGridWorldSubsystem* Grid = W->GetSubsystem<UGridWorldSubsystem>()) {
-			SetActorLocation(Grid->TileToWorldCenter(tile));
-		}
-	}
-}
-
-void AUnitActor::MoveAlongPath(const TArray<TacticsCore::TilePos>& InPath, float InSecondsPerTile)
+bool AUnitActor::TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath)
 {
-	SecondsPerTile = FMath::Max(0.01f, InSecondsPerTile);
-
-	Path = InPath;
-	if (Path.Num() == 0)
-		return;
-
-	if (Path[0] != tile)
-	{
-		Path.Insert(tile, 0);
+	const int32 Steps = InPath.Num() - 1;
+	if (Steps <= 0) {
+		return false;
 	}
 
-	if (Path.Num() < 2)
-	{
-		return;
+	if (Steps > MovePointsRemaining) {
+		return false;
 	}
+
+	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
+	if (!Grid) {
+		return false;
+	}
+
+	Waypoints.Reset();
+	Waypoints.Reserve(InPath.Num());
+
+	for (const TacticsCore::TilePos& T : InPath) {
+		Waypoints.Add(Grid->TileToWorldCenter(T));
+	}
+
+	MovePointsRemaining -= Steps;
+	Tile = InPath.Last();
 
 	bMoving = true;
-	PathIndex = 0;
-	SegmentT = 0.0f;
-
-	SnapToTile();
-	StartNextSegment();
+	WaypointIndex = 1;
+	return true;
 }
 
-void AUnitActor::StartNextSegment()
+void AUnitActor::RefreshWorldLocationFromTile()
 {
-	SegmentT = 0.0f;
-	SegmentFrom = TileToWorldCenter(Path[PathIndex]);
-	SegmentTo = TileToWorldCenter(Path[PathIndex + 1]);
-}
-
-FVector AUnitActor::TileToWorldCenter(const TacticsCore::TilePos& T) const
-{
-	if (const UWorld* W = GetWorld())
-	{
-		if (const UGridWorldSubsystem* Grid = W->GetSubsystem<UGridWorldSubsystem>())
-		{
-			return Grid->TileToWorldCenter(T);
-		}
+	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
+	if (!Grid) {
+		return;
 	}
-	return GetActorLocation();
+
+	SetActorLocation(Grid->TileToWorldCenter(Tile));
+}
+
+void AUnitActor::SetSelected(bool bSelected)
+{
+	bIsSelected = bSelected;
+	ApplySelectionVisuals();
+}
+
+void AUnitActor::ApplySelectionVisuals()
+{
+	SetActorScale3D(bIsSelected ? FVector(1.20f) : FVector(1.0f));
 }

@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,56 +5,58 @@
 #include "TacticsCoreTypes.h"
 #include "UnitActor.generated.h"
 
-DECLARE_MULTICAST_DELEGATE_TwoParams(FOnUnitActorStepped, AUnitActor*, const TacticsCore::TilePos&);
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnUnitActorMoveFinished, AUnitActor*);
-
 UCLASS()
 class P3_FLAGSHIP_API AUnitActor : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
-	// Sets default values for this actor's properties
+
+public:
 	AUnitActor();
 
-	void SetTile(const TacticsCore::TilePos& newTile);
-	const TacticsCore::TilePos& GetTile() const { return tile; }
-
-	void MoveAlongPath(const TArray<TacticsCore::TilePos>& InPath, float InSecondsPerTile = 0.12f);
-
-	FOnUnitActorStepped OnStepped;
-	FOnUnitActorMoveFinished OnMoveFinished;
-
-protected:
-	virtual void OnConstruction(const FTransform& Transform) override;
-	virtual void BeginPlay() override;
-
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
-private:
-	void SnapToTile();
-
-	void StartNextSegment();
-	FVector TileToWorldCenter(const TacticsCore::TilePos& T) const;
-
-	UPROPERTY(EditAnywhere, Category = "Tactics|Grid", meta = (ClampMin = "0"))
+	UPROPERTY(EditAnywhere, Category = "Unit")
 	int32 InitialTileX = 0;
 
-	UPROPERTY(EditAnywhere, Category = "Tactics|Grid", meta = (ClampMin = "0"))
+	UPROPERTY(EditAnywhere, Category = "Unit")
 	int32 InitialTileY = 0;
 
-	TacticsCore::TilePos tile { 0, 0 };
+	UPROPERTY(EditAnywhere, Category = "Unit|Movement")
+	float MoveSpeed = 600.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Unit|Stats")
+	int32 MovePointsMax = 6;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Stats")
+	int32 MovePointsRemaining = 6;
+
+	void RefreshForNewTurn();
+
+	TacticsCore::TilePos GetTile() const { return Tile; }
+	void SetTileImmediate(const TacticsCore::TilePos& NewTile);
+
+	bool TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath);
+
+	void SetSelected(bool bSelected);
+	bool IsSelected() const { return bIsSelected; }
+
+protected:
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+
+private:
+	UPROPERTY()
+	USceneComponent* Root = nullptr;
+
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent* Mesh = nullptr;
+
+	TacticsCore::TilePos Tile;
 
 	bool bMoving = false;
-	float SecondsPerTile = 0.12f;
+	TArray<FVector> Waypoints;
+	int32 WaypointIndex = 0;
 
-	TArray<TacticsCore::TilePos> Path;
-	int32 PathIndex = 0;
-	float SegmentT = 0.0f;
+	bool bIsSelected = false;
 
-	FVector SegmentFrom = FVector::ZeroVector;
-	FVector SegmentTo = FVector::ZeroVector;
+	void RefreshWorldLocationFromTile();
+	void ApplySelectionVisuals();
 };

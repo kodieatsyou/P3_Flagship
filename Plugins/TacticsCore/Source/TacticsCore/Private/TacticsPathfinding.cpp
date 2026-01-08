@@ -1,138 +1,145 @@
-
-
-
 #include "TacticsPathfinding.h"
-#include <algorithm>
-#include <cmath>
+
+#include <queue>
 
 namespace TacticsCore
 {
+	struct Node
+	{
+		TilePos T;
+		float F = 0.0f;
+		float G = 0.0f;
+	};
 
-	static inline int32_t HeuristicManhattan(const TilePos& a, const TilePos& b) {
-		const int32_t dx = (a.x > b.x) ? (a.x - b.x) : (b.x - a.x);
-		const int32_t dy = (a.y > b.y) ? (a.y - b.y) : (b.y - a.y);
-		return dx + dy;
+	static FORCEINLINE float HeuristicManhattan(const TilePos& A, const TilePos& B)
+	{
+		return float(FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y));
 	}
 
-    static inline void GetNeighbors4(const TilePos& p, TilePos out[4]) noexcept
-    {
-        out[0] = TilePos{ p.x + 1, p.y };
-        out[1] = TilePos{ p.x - 1, p.y };
-        out[2] = TilePos{ p.x, p.y + 1 };
-        out[3] = TilePos{ p.x, p.y - 1 };
-    }
+	struct NodeGreater
+	{
+		bool operator()(const Node& L, const Node& R) const { 
+			return L.F > R.F; 
+		}
+	};
 
-    struct Node
-    {
-        TilePos pos{};
-        int32_t f = 0;
-        int32_t g = 0;
-    };
+	static void ReconstructPath(
+		const GridDesc& Grid,
+		const TilePos& Start,
+		const TilePos& Goal,
+		const TArray<int32>& CameFrom,
+		PathResult& Out
+	)
+	{
+		Out.Path.Reset();
 
-    struct NodeGreater
-    {
-        bool operator()(const Node& a, const Node& b) const noexcept
-        {
-            if (a.f != b.f) return a.f > b.f;
-            return a.g > b.g;
-        }
-    };
+		TilePos Cur = Goal;
+		while (!(Cur == Start))
+		{
+			Out.Path.Add(Cur);
+			const int32 CurIdx = Grid.ToIndex(Cur);
+			const int32 PrevIdx = CameFrom[CurIdx];
+			if (PrevIdx < 0)
+			{
+				Out.bSuccess = false;
+				Out.Path.Reset();
+				return;
+			}
+			Cur = TilePos(PrevIdx % Grid.Width, PrevIdx / Grid.Width);
+		}
+		Out.Path.Add(Start);
+		Algo::Reverse(Out.Path);
+	}
 
-    PathResult FindPathAStar(
-        const GridDesc& grid,
-        const TilePos& start,
-        const TilePos& goal,
-        IsBlockedFn isBlocked,
-        void* userData
-    ) noexcept
-    {
-        PathResult result;
+	PathResult FindPathAStar(
+		const GridDesc& Grid,
+		const TilePos& Start,
+		const TilePos& Goal,
+		IsBlockedFn IsBlocked,
+		void* UserData,
+		MoveCostFn MoveCost
+	) noexcept
+	{
+		PathResult Result;
 
-        if (!grid.IsValid()) {
-            return result;
-        }
+		if (!Grid.InBounds(Start) || !Grid.InBounds(Goal)) {
+			return Result;
+		}
 
-        if (!InBounds(grid, start) || !InBounds(grid, goal)) {
-            return result;
-        }
+		if (IsBlocked && (IsBlocked(Start, UserData) || IsBlocked(Goal, UserData))) {
+			return Result;
+		}
 
-        if (start == goal) {
-            result.success = true;
-            result.path.push_back(start);
-            return result;
-        }
+		const int32 N = Grid.Width * Grid.Height;
 
-        std::priority_queue<Node, std::vector<Node>, NodeGreater> open;
-        std::unordered_map<TilePos, int32_t, TilePosHash> gScore;
-        std::unordered_map<TilePos, TilePos, TilePosHash> cameFrom;
-        std::unordered_set<TilePos, TilePosHash> closed;
+		TArray<float> GScore;
+		GScore.Init(TNumericLimits<float>::Max(), N);
 
-        gScore[start] = 0;
-        open.push(Node{ start, HeuristicManhattan(start, goal), 0 });
+		TArray<int32> CameFrom;
+		CameFrom.Init(-1, N);
 
-        while (!open.empty()) {
-            Node current = open.top();
-            open.pop();
+		TArray<uint8> Closed;
+		Closed.Init(0, N);
 
-            if (closed.find(current.pos) != closed.end()) {
-                continue;
-            }
+		std::priority_queue<Node, std::vector<Node>, NodeGreater> Open;
 
-            if (current.pos == goal) {
-                std::vector<TilePos> rev;
-                TilePos p = goal;
-                rev.push_back(p);
+		const int32 StartIdx = Grid.ToIndex(Start);
+		GScore[StartIdx] = 0.0f;
 
-                while (p != start) {
-                    auto it = cameFrom.find(p);
-                    if (it == cameFrom.end()) {
-                        break;
-                    }
+		Open.push(Node{ Start, HeuristicManhattan(Start, Goal), 0.0f });
 
-                    p = it->second;
-                    rev.push_back(p);
-                }
+		const TilePos Dirs[4] = { TilePos(1,0), TilePos(-1,0), TilePos(0,1), TilePos(0,-1) };
 
-                std::reverse(rev.begin(), rev.end());
-                result.success = true;
-                result.path = std::move(rev);
-                return result;
-            }
+		while (!Open.empty())
+		{
+			Node Cur = Open.top();
+			Open.pop();
 
-            closed.insert(current.pos);
+			const int32 CurIdx = Grid.ToIndex(Cur.T);
+			if (Closed[CurIdx]) {
+				continue;
+			}
 
-            TilePos neigh[4];
-            GetNeighbors4(current.pos, neigh);
+			Closed[CurIdx] = 1;
 
-            for (int i = 0; i < 4; i++) {
-                const TilePos n = neigh[i];
+			if (Cur.T == Goal)
+			{
+				Result.bSuccess = true;
+				ReconstructPath(Grid, Start, Goal, CameFrom, Result);
+				return Result;
+			}
 
-                if (!InBounds(grid, n)) {
-                    continue;
-                }
+			for (const TilePos& D : Dirs)
+			{
+				const TilePos Next(Cur.T.X + D.X, Cur.T.Y + D.Y);
+				if (!Grid.InBounds(Next)) {
+					continue;
+				}
 
-                if (closed.find(n) != closed.end()) {
-                    continue;
-                }
+				if (IsBlocked && IsBlocked(Next, UserData)) {
+					continue;
+				}
 
-                if (isBlocked && isBlocked(n, userData)) {
-                    continue;
-                }
+				const int32 NextIdx = Grid.ToIndex(Next);
+				if (Closed[NextIdx]) {
+					continue;
+				}
 
-                const int32_t tentativeG = current.g + 1;
+				const float StepCost = MoveCost ? MoveCost(Cur.T, Next, UserData) : 1.0f;
+				const float TentativeG = GScore[CurIdx] + StepCost;
 
-                auto itG = gScore.find(n);
-                if (itG == gScore.end() || tentativeG < itG->second) {
-                    cameFrom[n] = current.pos;
-                    gScore[n] = tentativeG;
+				if (TentativeG < GScore[NextIdx])
+				{
+					GScore[NextIdx] = TentativeG;
+					CameFrom[NextIdx] = CurIdx;
 
-                    const int32_t f = tentativeG + HeuristicManhattan(n, goal);
-                    open.push(Node{ n, f, tentativeG });
-                }
-            }
-        }
+					const float H = HeuristicManhattan(Next, Goal);
+					const float F = TentativeG + H;
+					Open.push(Node{ Next, F, TentativeG });
+				}
+			}
+		}
 
-        return result;
-    }
-
+		return Result;
+	}
 }

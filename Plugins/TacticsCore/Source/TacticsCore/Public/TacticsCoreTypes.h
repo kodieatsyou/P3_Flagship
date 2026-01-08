@@ -1,28 +1,49 @@
 #pragma once
 
-#include <cstdint>
-#include <functional>
+#include "CoreMinimal.h"
 
 namespace TacticsCore {
 
     struct TilePos {
-        int32_t x = 0;
-        int32_t y = 0;
+        int32_t X = 0;
+        int32_t Y = 0;
 
-        constexpr bool operator ==(const TilePos& other) const noexcept {
-            return x == other.x && y == other.y;
+        constexpr TilePos() = default;
+        constexpr TilePos(int32 InX, int32 InY) : X(InX), Y(InY) {}
+
+        FORCEINLINE bool operator==(const TilePos& Other) const { 
+            return X == Other.X && Y == Other.Y; 
+        }
+        FORCEINLINE bool operator!=(const TilePos& Other) const { 
+            return !(*this == Other); 
+        }
+    };
+
+    struct GridDesc
+    {
+        int32 Width = 0;
+        int32 Height = 0;
+
+        constexpr GridDesc() = default;
+        constexpr GridDesc(int32 InW, int32 InH) : Width(InW), Height(InH) {}
+
+        FORCEINLINE bool InBounds(const TilePos& T) const
+        {
+            return T.X >= 0 && T.Y >= 0 && T.X < Width && T.Y < Height;
         }
 
-        constexpr bool operator !=(const TilePos& other) const noexcept {
-            return !(*this == other);
+        FORCEINLINE int32 ToIndex(const TilePos& T) const
+        {
+            return T.Y * Width + T.X;
         }
     };
 
-    struct TilePosHash {
-        size_t operator()(const TilePos& p) const noexcept{
-            const uint64_t a = static_cast<uint32_t>(p.x);
-            const uint64_t b = static_cast<uint32_t>(p.y);
-            return static_cast<size_t>((a << 32) ^ b);
-        }
+    struct PathResult
+    {
+        bool bSuccess = false;
+        TArray<TilePos> Path;
     };
+
+    using IsBlockedFn = bool(*)(const TilePos& Tile, void* UserData);
+	using MoveCostFn = float(*)(const TilePos& From, const TilePos& To, void* UserData);
 }

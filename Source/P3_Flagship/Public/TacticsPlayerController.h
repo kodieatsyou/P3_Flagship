@@ -1,22 +1,38 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "TacticsCoreTypes.h"
 #include "TacticsPlayerController.generated.h"
+
+class AUnitActor;
 
 UCLASS()
 class P3_FLAGSHIP_API ATacticsPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
-	protected:
-		virtual void SetupInputComponent() override;
+public:
+	ATacticsPlayerController();
 
-	private:
-		void ClickMove();
-		void EndTurn();
+protected:
+	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 
-	
+private:
+	UPROPERTY()
+	AUnitActor* SelectedUnit = nullptr;
+
+	TSet<int32> ReachableSet;
+
+	void OnLeftClick();
+	void OnRightClick();
+	void OnEndTurnTest();
+
+	bool GetHoveredTile(TacticsCore::TilePos& OutTile, FVector& OutHitWorld) const;
+	AUnitActor* GetHoveredUnit() const;
+
+	void SelectUnit(AUnitActor* Unit);
+	void RecomputeAndDrawReachOverlay();
+	bool IsTileReachable(const TacticsCore::TilePos& Tile) const;
 };
