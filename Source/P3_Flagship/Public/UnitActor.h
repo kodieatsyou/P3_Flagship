@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "TacticsCoreTypes.h"
+#include "TacticsGameStateSubsystem.h"
 #include "UnitActor.generated.h"
 
 UCLASS()
@@ -13,26 +14,41 @@ class P3_FLAGSHIP_API AUnitActor : public AActor
 public:
 	AUnitActor();
 
-	UPROPERTY(EditAnywhere, Category = "Unit")
-	int32 InitialTileX = 0;
-
-	UPROPERTY(EditAnywhere, Category = "Unit")
-	int32 InitialTileY = 0;
-
 	UPROPERTY(EditAnywhere, Category = "Unit|Movement")
 	float MoveSpeed = 600.0f;
 
-	UPROPERTY(EditAnywhere, Category = "Unit|Stats")
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Identity")
+	int32 UnitId = -1;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Identity")
+	int32 SquadId = -1;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Identity")
+	ETacticsTeam Team = ETacticsTeam::Team0;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Stats")
 	int32 MovePointsMax = 6;
 
 	UPROPERTY(VisibleAnywhere, Category = "Unit|Stats")
 	int32 MovePointsRemaining = 6;
 
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Stats")
+	FTacticsWeaponDef Weapon;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Stats")
+	FName UtilityId = "None";
+
+	void InitializeFromGameState(
+		int32 InUnitId,
+		int32 InSquadId,
+		ETacticsTeam InTeam,
+		const FTacticsUnitDef& Def,
+		const TacticsCore::TilePos& InSpawnTile
+	);
+
 	void RefreshForNewTurn();
 
 	TacticsCore::TilePos GetTile() const { return Tile; }
-	void SetTileImmediate(const TacticsCore::TilePos& NewTile);
-
 	bool TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath);
 
 	void SetSelected(bool bSelected);
@@ -50,7 +66,9 @@ private:
 	UStaticMeshComponent* Mesh = nullptr;
 
 	TacticsCore::TilePos Tile;
+	TacticsCore::TilePos SpawnTile;
 
+	// Movement
 	bool bMoving = false;
 	TArray<FVector> Waypoints;
 	int32 WaypointIndex = 0;

@@ -2,10 +2,19 @@
 
 #include "GridWorldSubsystem.h"
 #include "DrawDebugHelpers.h"
+#include "TacticsWorldSettingsUtil.h"
+#include "TacticsWorldSettings.h"
 #include "Engine/World.h"
 
 void UTacticsDebugDrawSubsystem::OnWorldBeginPlay(UWorld& InWorld) {
 	Super::OnWorldBeginPlay(InWorld);
+
+	if (const ATacticsWorldSettings* WS = TacticsWorldSettingsUtil::Get(&InWorld))
+	{
+		bEnableDebugDrawing = WS->bEnableDebugDraw;
+		bDrawGrid = WS->bDrawGrid;
+		bDrawReach = WS->bDrawReach;
+	}
 
 	if (!bEnableDebugDrawing) {
 		return;

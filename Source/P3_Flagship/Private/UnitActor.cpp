@@ -14,7 +14,6 @@ AUnitActor::AUnitActor()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(Root);
 
-	// Make sure clicks can hit the unit even if you didn't set collision in the mesh asset.
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Mesh->SetCollisionResponseToAllChannels(ECR_Block);
 	Mesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -24,18 +23,38 @@ AUnitActor::AUnitActor()
 void AUnitActor::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplySelectionVisuals();
+}
 
-	Tile = TacticsCore::TilePos(InitialTileX, InitialTileY);
+void AUnitActor::InitializeFromGameState(
+	int32 InUnitId,
+	int32 InSquadId,
+	ETacticsTeam InTeam,
+	const FTacticsUnitDef& Def,
+	const TacticsCore::TilePos& InSpawnTile
+)
+{
+	UnitId = InUnitId;
+	SquadId = InSquadId;
+	Team = InTeam;
+
+	MovePointsMax = Def.MovePointsMax;
 	MovePointsRemaining = MovePointsMax;
 
+	Weapon = Def.Weapon;
+	UtilityId = Def.UtilityId;
+
+	SpawnTile = InSpawnTile;
+	Tile = InSpawnTile;
+
 	RefreshWorldLocationFromTile();
-	ApplySelectionVisuals();
 }
 
 void AUnitActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	// Selected marker
 	if (bIsSelected)
 	{
 		DrawDebugSphere(GetWorld(), GetActorLocation() + FVector(0, 0, 60), 30.0f, 12, FColor::Yellow, false, 0.0f, 0, 2.0f);
@@ -50,7 +69,6 @@ void AUnitActor::Tick(float DeltaSeconds)
 
 	const FVector ToTarget = Target - Cur;
 	const float Dist = ToTarget.Size();
-
 	const float Step = MoveSpeed * DeltaSeconds;
 
 	if (Dist <= Step || Dist < 1.0f)
@@ -70,17 +88,9 @@ void AUnitActor::Tick(float DeltaSeconds)
 	SetActorLocation(Cur + (ToTarget / Dist) * Step);
 }
 
-void AUnitActor::RefreshForNewTurn() {
-	MovePointsRemaining = MovePointsMax;
-}
-
-void AUnitActor::SetTileImmediate(const TacticsCore::TilePos& NewTile)
+void AUnitActor::RefreshForNewTurn()
 {
-	Tile = NewTile;
-	bMoving = false;
-	Waypoints.Reset();
-	WaypointIndex = 0;
-	RefreshWorldLocationFromTile();
+	MovePointsRemaining = MovePointsMax;
 }
 
 bool AUnitActor::TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath)
@@ -102,7 +112,8 @@ bool AUnitActor::TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath)
 	Waypoints.Reset();
 	Waypoints.Reserve(InPath.Num());
 
-	for (const TacticsCore::TilePos& T : InPath) {
+	for (const TacticsCore::TilePos& T : InPath)
+	{
 		Waypoints.Add(Grid->TileToWorldCenter(T));
 	}
 

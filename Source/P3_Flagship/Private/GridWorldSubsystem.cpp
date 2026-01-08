@@ -1,5 +1,19 @@
 #include "GridWorldSubsystem.h"
-#include "DrawDebugHelpers.h"
+#include "TacticsWorldSettingsUtil.h"
+#include "TacticsWorldSettings.h"
+
+void UGridWorldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	if (const ATacticsWorldSettings* WS = TacticsWorldSettingsUtil::Get(&InWorld))
+	{
+		GridWidth = WS->GridWidth;
+		GridHeight = WS->GridHeight;
+		TileSize = WS->TileSize;
+		GridOrigin = WS->GridOrigin;
+	}
+}
 
 TacticsCore::GridDesc UGridWorldSubsystem::GetGridDesc() const
 {
@@ -28,17 +42,12 @@ void UGridWorldSubsystem::SetBlockedTile(const TacticsCore::TilePos& Tile, bool 
 	}
 
 	const int32 Idx = GetGridDesc().ToIndex(Tile);
-	if (bBlocked) {
-		BlockedIndices.Add(Idx);
-	}
-	else {
-		BlockedIndices.Remove(Idx);
-	}
+	if (bBlocked) BlockedIndices.Add(Idx);
+	else BlockedIndices.Remove(Idx);
 }
 
 FVector UGridWorldSubsystem::TileToWorldCenter(const TacticsCore::TilePos& Tile) const
 {
-	// X -> world X, Y -> world Y
 	return GridOrigin + FVector((Tile.X + 0.5f) * TileSize, (Tile.Y + 0.5f) * TileSize, 0.0f);
 }
 

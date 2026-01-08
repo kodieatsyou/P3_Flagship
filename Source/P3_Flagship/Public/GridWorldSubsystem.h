@@ -11,7 +11,7 @@ class P3_FLAGSHIP_API UGridWorldSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	// --- Authoring parameters ---
+
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	int32 GridWidth = 12;
 
@@ -24,7 +24,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	FVector GridOrigin = FVector(0, 0, 0);
 
-	// --- API ---
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+
 	TacticsCore::GridDesc GetGridDesc() const;
 
 	bool IsInBounds(const TacticsCore::TilePos& Tile) const;

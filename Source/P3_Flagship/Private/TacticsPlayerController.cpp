@@ -1,6 +1,7 @@
 #include "TacticsPlayerController.h"
 #include "UnitActor.h"
 #include "GridWorldSubsystem.h"
+#include "TacticsGameStateSubsystem.h"
 #include "TacticsDebugDrawSubsystem.h"
 #include "TacticsPathfinding.h"
 #include "TacticsReachability.h"
@@ -28,6 +29,7 @@ void ATacticsPlayerController::SetupInputComponent()
 
 	InputComponent->BindAction("LeftClick", IE_Pressed, this, &ATacticsPlayerController::OnLeftClick);
 	InputComponent->BindAction("RightClick", IE_Pressed, this, &ATacticsPlayerController::OnRightClick);
+
 	InputComponent->BindAction("EndTurn", IE_Pressed, this, &ATacticsPlayerController::OnEndTurnTest);
 }
 
@@ -35,6 +37,15 @@ void ATacticsPlayerController::OnLeftClick()
 {
 	AUnitActor* Hovered = GetHoveredUnit();
 	if (!Hovered) {
+		return;
+	}
+
+	UTacticsGameStateSubsystem* GameState = GetWorld()->GetSubsystem<UTacticsGameStateSubsystem>();
+	if (!GameState) {
+		return;
+	}
+
+	if (!GameState->IsUnitControllable(Hovered)) {
 		return;
 	}
 
@@ -106,12 +117,14 @@ void ATacticsPlayerController::RecomputeAndDrawReachOverlay()
 
 bool ATacticsPlayerController::IsTileReachable(const TacticsCore::TilePos& Tile) const
 {
-	if (!SelectedUnit)
+	if (!SelectedUnit) {
 		return false;
+	}
 
 	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
-	if (!Grid)
+	if (!Grid) {
 		return false;
+	}
 
 	const TacticsCore::GridDesc Desc = Grid->GetGridDesc();
 	return ReachableSet.Contains(Desc.ToIndex(Tile));
@@ -119,20 +132,36 @@ bool ATacticsPlayerController::IsTileReachable(const TacticsCore::TilePos& Tile)
 
 void ATacticsPlayerController::OnRightClick()
 {
-	if (!SelectedUnit)
+	if (!SelectedUnit) {
 		return;
+	}
+
+	UTacticsGameStateSubsystem* GameState = GetWorld()->GetSubsystem<UTacticsGameStateSubsystem>();
+	if (!GameState) {
+		return;
+	}
+
+	// If active team changed and selection is stale, reject.
+	if (!GameState->IsUnitControllable(SelectedUnit))
+	{
+		SelectUnit(nullptr);
+		return;
+	}
 
 	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
-	if (!Grid)
+	if (!Grid) {
 		return;
+	}
 
 	TacticsCore::TilePos TargetTile;
 	FVector HitWorld;
-	if (!GetHoveredTile(TargetTile, HitWorld))
+	if (!GetHoveredTile(TargetTile, HitWorld)) {
 		return;
+	}
 
-	if (!IsTileReachable(TargetTile))
+	if (!IsTileReachable(TargetTile)) {
 		return;
+	}
 
 	const TacticsCore::TilePos StartTile = SelectedUnit->GetTile();
 	const TacticsCore::GridDesc Desc = Grid->GetGridDesc();
@@ -157,10 +186,21 @@ void ATacticsPlayerController::OnRightClick()
 
 void ATacticsPlayerController::OnEndTurnTest()
 {
-	UWorld* World = GetWorld();
-	if (!World) return;
-	SelectedUnit->RefreshForNewTurn();
-	RecomputeAndDrawReachOverlay();
+	UTacticsGameStateSubsystem* GameState = GetWorld()->GetSubsystem<UTacticsGameStateSubsystem>();
+	if (!GameState) {
+		return;
+	}
+
+	GameState->EndTurn();
+
+	if (SelectedUnit && !GameState->IsUnitControllable(SelectedUnit))
+	{
+		SelectUnit(nullptr);
+	}
+	else
+	{
+		RecomputeAndDrawReachOverlay();
+	}
 }
 
 bool ATacticsPlayerController::GetHoveredTile(TacticsCore::TilePos& OutTile, FVector& OutHitWorld) const
