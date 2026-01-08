@@ -26,6 +26,17 @@ struct FTacticsUnitState {
 
 	int32 Team = 0;
 	bool bAlive = true;
+
+	// ---- Movement state ----
+	TArray<TacticsCore::TilePos> ActivePath;
+	int32 PathIndex = 0;
+	bool bMoving = false;
+
+	FVector MoveFrom = FVector::ZeroVector;
+	FVector MoveTo = FVector::ZeroVector;
+	float MoveT = 0.0f;
+
+	UPROPERTY(EditAnywhere) float MoveSecondsPerTile = 0.15f;
 };
 
 UCLASS()
@@ -54,6 +65,15 @@ public:
 
 	void EnqueueCommand(const TacticsCore::Command& Cmd);
 
+	bool IsTileOccupied(const TacticsCore::TilePos& Tile) const;
+
+	TMap<TWeakObjectPtr<AUnitActor>, TacticsCore::EntityId> ActorToId;
+
+	void HandleUnitStepped(AUnitActor* Unit, const TacticsCore::TilePos& NewTile);
+	void HandleUnitMoveFinished(AUnitActor* Unit);
+
+	bool bDrawDebugGrid = true;
+
 private:
 	void ProcessCommands(int32 MaxPerTick);
 	void ApplyCommand(const TacticsCore::Command& Cmd);
@@ -62,7 +82,7 @@ private:
 	void ApplyEndTurn();
 
 	bool CanAct(TacticsCore::EntityId Id) const;
-	bool IsTileOccupied(const TacticsCore::TilePos& Tile) const;
+
 	TacticsCore::EntityId GetOccupant(const TacticsCore::TilePos& Tile) const;
 
 	static int64 PackTileKey(const TacticsCore::TilePos& Tile);
@@ -86,5 +106,7 @@ private:
 
 	TQueue<TacticsCore::Command> CommandQueue;
 
-	int32 MaxCommandsPerTick = 0;
+	int32 MaxCommandsPerTick = 8;
+
+	TArray<TacticsCore::TilePos> LastPath;
 };

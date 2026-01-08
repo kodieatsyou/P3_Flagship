@@ -3,6 +3,7 @@
 #include "GridWorldSubsystem.h"
 #include "DrawDebugHelpers.h"
 
+
 void UGridWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -68,4 +69,36 @@ void UGridWorldSubsystem::DebugDrawGrid(UWorld* world) const
         const FVector b(origin.X + w, wy, z);
         DrawDebugLine(world, a, b, FColor::Green, false, 0.0f, 0, 2.0f);
     }
+}
+
+
+void UGridWorldSubsystem::DebugFillTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset) const
+{
+    if (!World || !grid.IsValid())
+        return;
+
+    const FVector Center = TileToWorldCenter(Tile) + FVector(0, 0, ZOffset);
+    const FVector Extent(grid.tileSize * 0.5f, grid.tileSize * 0.5f, 1.0f);
+
+    DrawDebugBox(World, Center, Extent, Color, false, 0.0f, 0, 0.0f);
+}
+
+void UGridWorldSubsystem::DebugMarkTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset) const
+{
+    if (!World || !grid.IsValid())
+        return;
+
+    const FVector Center = TileToWorldCenter(Tile) + FVector(0, 0, ZOffset);
+
+    const float Half = grid.tileSize * 0.25f;
+
+    const FVector A = Center + FVector(-Half, 0, 0);
+    const FVector B = Center + FVector(Half, 0, 0);
+    const FVector C = Center + FVector(0, -Half, 0);
+    const FVector D = Center + FVector(0, Half, 0);
+
+    DrawDebugLine(World, A, B, Color, false, 0.0f, 0, 6.0f);
+    DrawDebugLine(World, C, D, Color, false, 0.0f, 0, 6.0f);
+
+    DrawDebugBox(World, Center + FVector(0, 0, 10.0f), FVector(6, 6, 10), Color, false, 0.0f, 0, 2.0f);
 }

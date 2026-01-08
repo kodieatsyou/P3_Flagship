@@ -4,9 +4,16 @@
 #include "TacticsSimWorldSubsystem.h"
 
 #include "GridWorldSubsystem.h"
+#include "TacticsPathfinding.h"
 #include "UnitActor.h"
 
 #include "Engine/World.h"
+
+static bool IsBlockedAdapter(const TacticsCore::TilePos& Tile, void* User)
+{
+	auto* Sim = static_cast<UTacticsSimWorldSubsystem*>(User);
+	return Sim->IsTileOccupied(Tile);
+}
 
 void UTacticsSimWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection) {
 	Super::Initialize(Collection);
@@ -40,6 +47,46 @@ TStatId UTacticsSimWorldSubsystem::GetStatId() const {
 
 void UTacticsSimWorldSubsystem::Tick(float DeltaTime) {
 	ProcessCommands(MaxCommandsPerTick);
+
+	if (bDrawDebugGrid) {
+		UWorld* W = GetWorld();
+		if (!W) return;
+
+		UGridWorldSubsystem* Grid = W->GetSubsystem<UGridWorldSubsystem>();
+		if (!Grid || !Grid->IsDebugDrawEnabled())
+			return;
+
+		//Base Grid
+		Grid->DebugDrawGrid(W);
+
+		// Occupied
+		for (const auto& Pair : Units)
+		{
+			const FTacticsUnitState& S = Pair.Value;
+			if (!S.bAlive) {
+				continue;
+			}
+			Grid->DebugFillTile(W, S.Tile, FColor::Blue, 2.0f);
+		}
+
+		// Active
+		if (ActiveEntity != 0)
+		{
+			if (const FTacticsUnitState* Active = Units.Find(ActiveEntity))
+			{
+				Grid->DebugMarkTile(W, Active->Tile, FColor::Yellow, 8.0f);
+			}
+		}
+
+		//Path
+		if (LastPath.Num() > 1)
+		{
+			for (int32 i = 0; i < LastPath.Num(); ++i)
+			{
+				Grid->DebugFillTile(W, LastPath[i], FColor::Cyan, 4.0f);
+			}
+		}
+	}
 }
 
 TacticsCore::EntityId UTacticsSimWorldSubsystem::RegisterUnit(AUnitActor* UnitActor, int32 Team) {
@@ -79,6 +126,11 @@ TacticsCore::EntityId UTacticsSimWorldSubsystem::RegisterUnit(AUnitActor* UnitAc
 	Units.Add(Id, S);
 	SetOccupant(Tile, Id);
 
+	ActorToId.Add(UnitActor, Id);
+
+	UnitActor->OnStepped.AddUObject(this, &UTacticsSimWorldSubsystem::HandleUnitStepped);
+	UnitActor->OnMoveFinished.AddUObject(this, &UTacticsSimWorldSubsystem::HandleUnitMoveFinished);
+
 	UE_LOG(LogTemp, Log, TEXT("[Sim] Registered Unit Id=%u Team=%d Tile=(%d,%d) Actor=%s"), Id, Team, Tile.x, Tile.y, *GetNameSafe(UnitActor));
 
 	return Id;
@@ -92,6 +144,13 @@ bool UTacticsSimWorldSubsystem::UnregisterUnit(TacticsCore::EntityId Id) {
 
 	ClearOccupant(S->Tile);
 	Units.Remove(Id);
+
+	if (S->Actor)
+	{
+		S->Actor->OnStepped.RemoveAll(this);
+		S->Actor->OnMoveFinished.RemoveAll(this);
+		ActorToId.Remove(S->Actor);
+	}
 
 	//If combat is active we need to rebuild the turn order
 	if (bCombatActive) {
@@ -155,8 +214,16 @@ void UTacticsSimWorldSubsystem::EnqueueCommand(const TacticsCore::Command& Cmd) 
 	CommandQueue.Enqueue(Cmd);
 }
 
-void UTacticsSimWorldSubsystem::ProcessCommands(int32 MaxPerTick) {
-	for (int32 i = 0; i < MaxPerTick; ++i) {
+void UTacticsSimWorldSubsystem::ProcessCommands(int32 MaxPerTick)
+{
+	if (MaxPerTick <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Sim] MaxCommandsPerTick <= 0, forcing to 1"));
+		MaxPerTick = 1;
+	}
+
+	for (int32 i = 0; i < MaxPerTick; ++i)
+	{
 		TacticsCore::Command Cmd;
 		if (!CommandQueue.Dequeue(Cmd)) {
 			break;
@@ -221,16 +288,45 @@ void UTacticsSimWorldSubsystem::ApplyMove(const TacticsCore::MoveCommand& Move) 
 		return;
 	}
 
-	const TacticsCore::TilePos From = S->Tile;
-	const TacticsCore::TilePos To = Move.dest;
+	const TacticsCore::GridDesc& G = Grid->GetGridDesc();
 
-	if (From != To) {
-		ClearOccupant(From);
-		SetOccupant(To, S->Id);
-		S->Tile = To;
+	struct LocalCtx { UTacticsSimWorldSubsystem* Sim; TacticsCore::TilePos Self; };
+	LocalCtx Ctx{ this, S->Tile };
 
-		S->Actor->SetTile(To);
+	auto IsBlockedSelfAware = [](const TacticsCore::TilePos& T, void* U) -> bool
+		{
+			LocalCtx* C = static_cast<LocalCtx*>(U);
+			if (T == C->Self) {
+				return false;
+			}
+			return C->Sim->IsTileOccupied(T);
+		};
+
+	const TacticsCore::PathResult Path = TacticsCore::FindPathAStar(
+		G,
+		S->Tile,
+		Move.dest,
+		IsBlockedSelfAware,
+		&Ctx
+	);
+
+	if (!Path.success) {
+		UE_LOG(LogTemp, Log, TEXT("[Sim] Move rejected: no path"));
+		return;
 	}
+
+	LastPath.Reset();
+	LastPath.Reserve((int32)Path.path.size());
+
+	TArray<TacticsCore::TilePos> Tiles;
+	Tiles.Reserve((int32)Path.path.size());
+	for (const TacticsCore::TilePos& T : Path.path)
+	{
+		Tiles.Add(T);
+		LastPath.Add(T);
+	}
+
+	S->Actor->MoveAlongPath(Tiles, 0.12f);
 }
 
 void UTacticsSimWorldSubsystem::ApplyEndTurn() {
@@ -313,4 +409,64 @@ void UTacticsSimWorldSubsystem::SetOccupant(const TacticsCore::TilePos& Tile, Ta
 
 void UTacticsSimWorldSubsystem::ClearOccupant(const TacticsCore::TilePos& Tile) {
 	Occupancy.Remove(PackTileKey(Tile));
+}
+
+void UTacticsSimWorldSubsystem::HandleUnitStepped(AUnitActor* Unit, const TacticsCore::TilePos& NewTile)
+{
+	if (!Unit) {
+		return;
+	}
+
+	const TacticsCore::EntityId* IdPtr = ActorToId.Find(Unit);
+	if (!IdPtr) {
+		return;
+	}
+
+	FTacticsUnitState* S = Units.Find(*IdPtr);
+	if (!S || !S->bAlive) {
+		return;
+	}
+
+	if (S->Actor != Unit) {
+		return;
+	}
+
+	const TacticsCore::EntityId Occ = GetOccupant(NewTile);
+	if (Occ != 0 && Occ != S->Id)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Sim] Step conflict: Unit=%u tried to step onto occupied tile (%d,%d) by %u"),
+			S->Id, NewTile.x, NewTile.y, Occ);
+		return;
+	}
+
+	ClearOccupant(S->Tile);
+	SetOccupant(NewTile, S->Id);
+
+	S->Tile = NewTile;
+
+	UE_LOG(LogTemp, Verbose, TEXT("[Sim] Unit=%u stepped to (%d,%d)"), S->Id, NewTile.x, NewTile.y);
+}
+
+void UTacticsSimWorldSubsystem::HandleUnitMoveFinished(AUnitActor* Unit)
+{
+	if (!Unit) {
+		return;
+	}
+
+	const TacticsCore::EntityId* IdPtr = ActorToId.Find(Unit);
+	if (!IdPtr) {
+		return;
+	}
+
+	FTacticsUnitState* S = Units.Find(*IdPtr);
+	if (!S || !S->bAlive) {
+		return;
+	}
+
+	if (S->Id == ActiveEntity) {
+		LastPath.Reset();
+	}
+
+
+	UE_LOG(LogTemp, Log, TEXT("[Sim] Unit=%u move finished at (%d,%d)"), S->Id, S->Tile.x, S->Tile.y);
 }

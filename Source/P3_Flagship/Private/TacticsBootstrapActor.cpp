@@ -37,6 +37,10 @@ void ATacticsBootstrapActor::BeginPlay()
 	if (bAutoStartCombat) {
 		Sim->StartCombat();
 	}
+
+	if (bDrawDebug) {
+		Sim->bDrawDebugGrid = true;
+	}
 	
 }
 

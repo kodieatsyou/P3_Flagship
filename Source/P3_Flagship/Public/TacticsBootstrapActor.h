@@ -26,4 +26,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Tactics")
 	bool bAutoStartCombat = true;
 
+	UPROPERTY(EditAnywhere, Category = "Tactics|Debug")
+	bool bDrawDebug = true;
+
 };

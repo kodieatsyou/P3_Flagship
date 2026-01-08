@@ -29,6 +29,15 @@ class P3_FLAGSHIP_API UGridWorldSubsystem : public UWorldSubsystem
 		bool IsDebugDrawEnabled() const { return bDebugDraw; }
 
 		void DebugDrawGrid(UWorld *world) const;
+		void DebugDrawTile(
+			UWorld* World,
+			const TacticsCore::TilePos& Tile,
+			const FColor& Color,
+			float Thickness = 4.0f
+		) const;
+
+		void DebugFillTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset = 2.0f) const;
+		void DebugMarkTile(UWorld* World, const TacticsCore::TilePos& Tile, const FColor& Color, float ZOffset = 6.0f) const;
 
 	private:
 		FVector origin = FVector::ZeroVector;
