@@ -47,6 +47,10 @@ void AUnitActor::InitializeFromGameState(
 	SpawnTile = InSpawnTile;
 	Tile = InSpawnTile;
 
+	MaxHP = 10;
+	CurrentHP = MaxHP;
+	bHasAttackedThisTurn = false;
+
 	RefreshWorldLocationFromTile();
 }
 
@@ -91,6 +95,7 @@ void AUnitActor::Tick(float DeltaSeconds)
 void AUnitActor::RefreshForNewTurn()
 {
 	MovePointsRemaining = MovePointsMax;
+	bHasAttackedThisTurn = false;
 }
 
 bool AUnitActor::TryStartMovePath(const TArray<TacticsCore::TilePos>& InPath)
@@ -144,4 +149,15 @@ void AUnitActor::SetSelected(bool bSelected)
 void AUnitActor::ApplySelectionVisuals()
 {
 	SetActorScale3D(bIsSelected ? FVector(1.20f) : FVector(1.0f));
+}
+
+bool AUnitActor::CanAttack() const
+{
+	return (!bHasAttackedThisTurn && !IsDead());
+}
+
+void AUnitActor::ApplyDamage(int32 Amount)
+{
+	CurrentHP -= Amount;
+	CurrentHP = FMath::Max(0, CurrentHP);
 }

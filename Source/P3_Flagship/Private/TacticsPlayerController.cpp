@@ -5,6 +5,7 @@
 #include "TacticsDebugDrawSubsystem.h"
 #include "TacticsPathfinding.h"
 #include "TacticsReachability.h"
+#include "TacticsCombat.h"
 #include "Engine/World.h"
 
 ATacticsPlayerController::ATacticsPlayerController()
@@ -113,6 +114,8 @@ void ATacticsPlayerController::RecomputeAndDrawReachOverlay()
 
 	Debug->SetReachOverlay(Reach.Reachable);
 	Debug->SetSelectedTile(Start);
+
+	RecomputeAndDrawAttackRange();
 }
 
 bool ATacticsPlayerController::IsTileReachable(const TacticsCore::TilePos& Tile) const
@@ -141,7 +144,6 @@ void ATacticsPlayerController::OnRightClick()
 		return;
 	}
 
-	// If active team changed and selection is stale, reject.
 	if (!GameState->IsUnitControllable(SelectedUnit))
 	{
 		SelectUnit(nullptr);
@@ -153,6 +155,70 @@ void ATacticsPlayerController::OnRightClick()
 		return;
 	}
 
+	// ------------------------------------------------------------
+	// 1) ATTACK
+	// ------------------------------------------------------------
+	if (AUnitActor* TargetUnit = GetHoveredUnit())
+	{
+
+		if (TargetUnit == SelectedUnit) {
+			return;
+		}
+
+		// Must be allowed to attack this turn
+		if (!SelectedUnit->CanAttack()) {
+			return;
+		}
+
+		const FTacticsUnitRecord* AttackerRec = GameState->GetUnitRecordByActor(SelectedUnit);
+		const FTacticsUnitRecord* TargetRec = GameState->GetUnitRecordByActor(TargetUnit);
+		if (!AttackerRec || !TargetRec) {
+			return;
+		}
+
+		if (AttackerRec->Team == TargetRec->Team) {
+			return;
+		}
+
+		const TacticsCore::TilePos AttackerTile = SelectedUnit->GetTile();
+		const TacticsCore::TilePos TargetTile = TargetUnit->GetTile();
+
+
+		if (!IsTileInAttackRange(TargetTile)) {
+			return;
+		}
+
+		if (SelectedUnit->Weapon.bRequiresLOS)
+		{
+			const bool bHasLOS = TacticsCore::HasLineOfSight(
+				Grid->GetGridDesc(),
+				AttackerTile,
+				TargetTile,
+				&UGridWorldSubsystem::IsBlockedFn,
+				Grid
+			);
+
+			if (!bHasLOS) {
+				return;
+			}
+		}
+
+		// Apply damage and consume attack
+		TargetUnit->ApplyDamage(SelectedUnit->Weapon.Damage);
+		SelectedUnit->bHasAttackedThisTurn = true;
+
+		if (TargetUnit->IsDead())
+		{
+			GameState->HandleUnitDeath(TargetUnit);
+		}
+
+		RecomputeAndDrawAttackRange();
+		return;
+	}
+
+	// ------------------------------------------------------------
+	// 2) MOVE 
+	// ------------------------------------------------------------
 	TacticsCore::TilePos TargetTile;
 	FVector HitWorld;
 	if (!GetHoveredTile(TargetTile, HitWorld)) {
@@ -179,7 +245,9 @@ void ATacticsPlayerController::OnRightClick()
 	{
 		if (SelectedUnit->TryStartMovePath(Path.Path))
 		{
+			// Movement changes position + MP, so update overlays.
 			RecomputeAndDrawReachOverlay();
+			RecomputeAndDrawAttackRange();
 		}
 	}
 }
@@ -227,4 +295,63 @@ AUnitActor* ATacticsPlayerController::GetHoveredUnit() const
 	}
 
 	return Cast<AUnitActor>(Hit.GetActor());
+}
+
+void ATacticsPlayerController::RecomputeAndDrawAttackRange()
+{
+	AttackRangeSet.Reset();
+
+	if (!SelectedUnit || !SelectedUnit->CanAttack())
+	{
+		if (UTacticsDebugDrawSubsystem* Debug = GetWorld()->GetSubsystem<UTacticsDebugDrawSubsystem>())
+		{
+			Debug->ClearAttackRangeOverlay();
+		}
+		return;
+	}
+
+	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
+	UTacticsDebugDrawSubsystem* Debug = GetWorld()->GetSubsystem<UTacticsDebugDrawSubsystem>();
+	if (!Grid || !Debug) {
+		return;
+	}
+
+	const TacticsCore::GridDesc Desc = Grid->GetGridDesc();
+	const TacticsCore::TilePos Start = SelectedUnit->GetTile();
+	const int32 Range = SelectedUnit->Weapon.RangeTiles;
+
+	TArray<TacticsCore::TilePos> Tiles;
+
+	for (int32 y = 0; y < Desc.Height; ++y)
+	{
+		for (int32 x = 0; x < Desc.Width; ++x)
+		{
+			TacticsCore::TilePos T(x, y);
+			if (TacticsCore::ManhattanDistance(Start, T) <= Range)
+			{
+				const int32 Idx = Desc.ToIndex(T);
+				AttackRangeSet.Add(Idx);
+				Tiles.Add(T);
+			}
+		}
+	}
+
+	Debug->SetAttackRangeOverlay(Tiles);
+}
+
+bool ATacticsPlayerController::IsTileInAttackRange(const TacticsCore::TilePos& Tile) const
+{
+	if (!SelectedUnit) {
+		return false;
+	}
+
+	UGridWorldSubsystem* Grid = GetWorld()->GetSubsystem<UGridWorldSubsystem>();
+	if (!Grid) {
+		return false;
+	}
+
+	const TacticsCore::GridDesc Desc = Grid->GetGridDesc();
+	const int32 TileIndex = Desc.ToIndex(Tile);
+
+	return AttackRangeSet.Contains(TileIndex);
 }

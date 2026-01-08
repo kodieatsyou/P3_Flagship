@@ -57,10 +57,15 @@ public:
 	void ClearSelectedTile();
 	void SetSelectedTile(const TacticsCore::TilePos& Tile);
 
+	// --- Attack Range ---
+	void ClearAttackRangeOverlay();
+	void SetAttackRangeOverlay(const TArray<TacticsCore::TilePos>& Tiles);
+
 private:
 	TArray<TacticsCore::TilePos> CachedReachTiles;
 	bool bHasSelectedTile = false;
 	TacticsCore::TilePos CachedSelectedTile;
+	TArray<TacticsCore::TilePos> CachedAttackRangeTiles;
 
 	void FlushAndRedrawAll();
 
@@ -68,4 +73,5 @@ private:
 	void DrawGridInternal(const UGridWorldSubsystem* Grid, UWorld* World) const;
 	void DrawReachInternal(const UGridWorldSubsystem* Grid, UWorld* World) const;
 	void DrawSelectedInternal(const UGridWorldSubsystem* Grid, UWorld* World) const;
+	void DrawAttackRangeInternal(const UGridWorldSubsystem* Grid, UWorld* World) const;
 };

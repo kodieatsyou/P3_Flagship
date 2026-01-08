@@ -196,3 +196,21 @@ FTacticsUnitRecord* UTacticsGameStateSubsystem::GetUnitRecordByActor(AUnitActor*
 	}
 	return nullptr;
 }
+
+void UTacticsGameStateSubsystem::HandleUnitDeath(AUnitActor* UnitActor)
+{
+	if (!UnitActor) {
+		return;
+	}
+
+	for (int32 i = Units.Num() - 1; i >= 0; --i)
+	{
+		if (Units[i].Actor == UnitActor)
+		{
+			Units.RemoveAt(i);
+			break;
+		}
+	}
+
+	UnitActor->Destroy();
+}

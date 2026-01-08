@@ -29,6 +29,9 @@ struct FTacticsWeaponDef
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Damage = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool bRequiresLOS = true;
 };
 
 USTRUCT(BlueprintType)
@@ -139,6 +142,8 @@ public:
 	FTacticsUnitRecord* GetUnitRecordByActor(AUnitActor* UnitActor);
 
 	void RefreshMovePointsForActiveTeam();
+
+	void HandleUnitDeath(AUnitActor* UnitActor);
 
 private:
 	// -- State --

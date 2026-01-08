@@ -35,4 +35,8 @@ private:
 	void SelectUnit(AUnitActor* Unit);
 	void RecomputeAndDrawReachOverlay();
 	bool IsTileReachable(const TacticsCore::TilePos& Tile) const;
+
+	void RecomputeAndDrawAttackRange();
+	bool IsTileInAttackRange(const TacticsCore::TilePos& Tile) const;
+	TSet<int32> AttackRangeSet;
 };

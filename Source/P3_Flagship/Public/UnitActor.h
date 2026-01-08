@@ -54,6 +54,19 @@ public:
 	void SetSelected(bool bSelected);
 	bool IsSelected() const { return bIsSelected; }
 
+	// --- Combat ---
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Combat")
+	int32 MaxHP = 10;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Combat")
+	int32 CurrentHP = 10;
+
+	UPROPERTY(VisibleAnywhere, Category = "Unit|Combat")
+	bool bHasAttackedThisTurn = false;
+	bool CanAttack() const;
+	void ApplyDamage(int32 Amount);
+	bool IsDead() const { return CurrentHP <= 0; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -68,13 +81,11 @@ private:
 	TacticsCore::TilePos Tile;
 	TacticsCore::TilePos SpawnTile;
 
-	// Movement
+	// --- Movement ---
 	bool bMoving = false;
 	TArray<FVector> Waypoints;
 	int32 WaypointIndex = 0;
-
 	bool bIsSelected = false;
-
 	void RefreshWorldLocationFromTile();
 	void ApplySelectionVisuals();
 };
